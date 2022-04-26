@@ -42,6 +42,7 @@ import transformers
 # Imports from our module
 from transformer_mt.modeling_transformer import TransfomerEncoderDecoderModel
 from transformer_mt import utils
+from transformers import BertTokenizer
 
 
 # Setup logging
@@ -446,7 +447,9 @@ def main():
     # https://huggingface.co/docs/transformers/v4.16.2/en/main_classes/tokenizer#transformers.PreTrainedTokenizerFast
     # Our implementation is two lines.
     # YOUR CODE STARTS HERE
-    source_tokenizer = transformers.PreTrainedTokenizerFast.from_pretrained(src_tokenizer_path)
+    # source_tokenizer = BertTokenizer.from_pretrained('Langboat/mengzi-bert-base')
+    # source_tokenizer = transformers.PreTrainedTokenizerFast.from_pretrained(src_tokenizer_path)
+    source_tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
     target_tokenizer = transformers.PreTrainedTokenizerFast.from_pretrained(tgt_tokenizer_path)
     # YOUR CODE ENDS HERE
 
@@ -593,13 +596,11 @@ def main():
             decoder_input_ids = batch["decoder_input_ids"].to(args.device)
             key_padding_mask = batch["encoder_padding_mask"].to(args.device)
             labels = batch["labels"].to(args.device)
-            token_type_ids = batch["token_type_ids"].to(args.device)
 
             logits = model(
                 input_ids,
                 decoder_input_ids=decoder_input_ids,
-                key_padding_mask=key_padding_mask,
-                token_type_ids=token_type_ids
+                key_padding_mask=key_padding_mask
             )
 
             loss = F.cross_entropy(

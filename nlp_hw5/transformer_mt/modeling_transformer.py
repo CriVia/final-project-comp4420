@@ -196,15 +196,17 @@ class TransfomerEncoderDecoderModel(nn.Module):
         # 3. Create a dropout layer
         # YOUR CODE STARTS HERE (our implementation is about 5 lines)
 
-        self.encoder_embeddings = nn.Embedding(src_vocab_size, hidden)
-        self.decoder_embeddings = nn.Embedding(tgt_vocab_size, hidden)
-        self.positional_emb = nn.Embedding(max_seq_len, hidden)
-        
         # add bert pretrained encoder
-        self.pre_trained_encoder = BertModel.from_pretrained('Langboat/mengzi-bert-base', return_dict=True)
+        # self.pre_trained_encoder = BertModel.from_pretrained('Langboat/mengzi-bert-base', return_dict=True)
+        self.pre_trained_encoder = BertModel.from_pretrained('bert-base-uncased')
+        hidden_pretrained = self.pre_trained_encoder.config.hidden_size
+        
+        self.encoder_embeddings = nn.Embedding(src_vocab_size, hidden_pretrained) # hidden)
+        self.decoder_embeddings = nn.Embedding(tgt_vocab_size, hidden_pretrained) # hidden)
+        self.positional_emb = nn.Embedding(max_seq_len, hidden_pretrained) # hidden)
 
         # self.out_proj = nn.Linear(hidden, tgt_vocab_size)
-        self.out_proj = nn.Linear(self.pre_trained_encoder.config.hidden_size, tgt_vocab_size)
+        self.out_proj = nn.Linear(hidden_pretrained, tgt_vocab_size)
         self.dropout = nn.Dropout(dropout)
         # YOUR CODE ENDS HERE
 
@@ -220,8 +222,8 @@ class TransfomerEncoderDecoderModel(nn.Module):
         # You can use for-loop of python list comprehension to create the list of layers
         #
         # YOUR CODE STARTS HERE (our implementation is 3-6 lines)
-        self.encoder_layers = nn.ModuleList([TransformerEncoderLayer(hidden, num_heads, fcn_hidden) for _ in range(num_layers)])
-        self.decoder_layers = nn.ModuleList([TransformerDecoderLayer(hidden, num_heads, fcn_hidden) for _ in range(num_layers)])
+        self.encoder_layers = nn.ModuleList([TransformerEncoderLayer(hidden_pretrained, num_heads, fcn_hidden) for _ in range(num_layers)])
+        self.decoder_layers = nn.ModuleList([TransformerDecoderLayer(hidden_pretrained, num_heads, fcn_hidden) for _ in range(num_layers)])
         # YOUR CODE ENDS HERE
 
     def _add_positions(self, sequence_tensor):
@@ -240,8 +242,7 @@ class TransfomerEncoderDecoderModel(nn.Module):
         input_ids=None,
         encoder_hidden_states=None,
         decoder_input_ids=None,
-        key_padding_mask=None,
-        token_type_ids=None
+        key_padding_mask=None
     ):
         """
         input_ids -> encoder_emb -> encoder -> 
@@ -274,13 +275,13 @@ class TransfomerEncoderDecoderModel(nn.Module):
             raise ValueError("You should provide either input_ids or encoder_hidden_states")
 
         if encoder_hidden_states is None:
-            encoder_hidden_states = self._encode(input_ids, key_padding_mask, token_type_ids)
+            encoder_hidden_states = self._encode(input_ids, key_padding_mask)
 
         logits = self._decode(encoder_hidden_states, decoder_input_ids, key_padding_mask)
 
         return logits
 
-    def _encode(self, input_ids, key_padding_mask, token_type_ids):
+    def _encode(self, input_ids, key_padding_mask):
         # Task 2.5 (2 points)
         # 1. Get source embeddings using self.encoder_embeddings
         # 2. Add positional embedding to encoder embeddings using _add_positions
@@ -289,15 +290,16 @@ class TransfomerEncoderDecoderModel(nn.Module):
         # YOUR CODE STARTS HERE
         pooled_output = self.pre_trained_encoder(
           input_ids=input_ids,
-          attention_mask=key_padding_mask,
-          token_type_ids=token_type_ids
+          attention_mask=key_padding_mask
          )
         
-        input_embed = self.encoder_embeddings(pooled_output[1])
-        encoder_hidden_states = self._add_positions(input_embed)
+        # input_embed = self.encoder_embeddings(input_ids)
+        # encoder_hidden_states = self._add_positions(input_embed)
 
-        for encoder_layer in self.encoder_layers:
-            encoder_hidden_states = encoder_layer(encoder_hidden_states, key_padding_mask)
+        # for encoder_layer in self.encoder_layers:
+        #    encoder_hidden_states = encoder_layer(encoder_hidden_states, key_padding_mask)
+        
+        encoder_hidden_states = pooled_output["last_hidden_state"]
         
         # YOUR CODE ENDS HERE
 
