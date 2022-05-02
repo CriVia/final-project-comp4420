@@ -263,11 +263,11 @@ def parse_args():
 
     args = parser.parse_args()
 
-    if f"{args.source_lang}_tokenizer" not in os.listdir(args.output_dir):
-        raise ValueError(f"The source tokenizer is not found in {args.output_dir}")
+    #if f"{args.source_lang}_tokenizer" not in os.listdir(args.output_dir):
+    #    raise ValueError(f"The source tokenizer is not found in {args.output_dir}")
     
-    if f"{args.target_lang}_tokenizer" not in os.listdir(args.output_dir):
-        raise ValueError(f"The target tokenizer is not found in {args.output_dir}")
+    #if f"{args.target_lang}_tokenizer" not in os.listdir(args.output_dir):
+    #    raise ValueError(f"The target tokenizer is not found in {args.output_dir}")
 
     return args
 
@@ -300,9 +300,11 @@ def preprocess_function(
     inputs = [ex[source_lang] for ex in examples["translation"]]
     targets = [ex[target_lang] for ex in examples["translation"]]
 
-    model_inputs = source_tokenizer(inputs, max_length=max_seq_length, truncation=True)
+    model_inputs = source_tokenizer(inputs, max_length=max_seq_length, truncation=True, padding=True)
+    #model_inputs = source_tokenizer(inputs, truncation=True)
 
-    targets = target_tokenizer(targets, max_length=max_seq_length - 1, truncation=True)
+    targets = target_tokenizer(targets, max_length=max_seq_length, truncation=True, padding=True)
+    #targets = target_tokenizer(targets, truncation=True)
     target_ids = targets["input_ids"]
 
     # Inline question 4.1:
@@ -315,8 +317,8 @@ def preprocess_function(
     decoder_input_ids = []
     labels = []
     for target in target_ids:
-        decoder_input_ids.append([target_tokenizer.bos_token_id] + target)
-        labels.append(target + [target_tokenizer.eos_token_id])
+        decoder_input_ids.append(target)
+        labels.append(target)
 
     # Inline question 4.2:
     # Why do we need to shift the target text by one token?
@@ -383,13 +385,12 @@ def evaluate_model(
 
             generated_tokens = model.generate(
                 input_ids,
-                bos_token_id=target_tokenizer.bos_token_id,
+                #bos_token_id=target_tokenizer.bos_token_id,
                 eos_token_id=target_tokenizer.eos_token_id,
                 pad_token_id=target_tokenizer.pad_token_id,
-                key_padding_mask=key_padding_mask,
+                #attention_mask=key_padding_mask,
                 max_length=max_seq_length,
-                kind=generation_type,
-                beam_size=beam_size,
+                #num_beams=beam_size,
             )
             decoded_preds = target_tokenizer.batch_decode(generated_tokens, skip_special_tokens=True)
             decoded_labels = target_tokenizer.batch_decode(labels, skip_special_tokens=True)
@@ -411,6 +412,7 @@ def evaluate_model(
 
 
 def main():
+    # torch.cuda.empty_cache()
     # Parse the arguments
     args = parse_args()
     logger.info(f"Starting script with arguments: {args}")
@@ -440,17 +442,25 @@ def main():
     # Part 2: Create the model and load the tokenizers
     ###############################################################################
 
-    src_tokenizer_path = os.path.join(args.output_dir, f"{args.source_lang}_tokenizer")
-    tgt_tokenizer_path = os.path.join(args.output_dir, f"{args.target_lang}_tokenizer")
+    #src_tokenizer_path = os.path.join(args.output_dir, f"{args.source_lang}_tokenizer")
+    #tgt_tokenizer_path = os.path.join(args.output_dir, f"{args.target_lang}_tokenizer")
     # Task 4.1: Load source and target tokenizers from the variables above
     # using transformers.PreTrainedTokenizerFast.from_pretrained
     # https://huggingface.co/docs/transformers/v4.16.2/en/main_classes/tokenizer#transformers.PreTrainedTokenizerFast
     # Our implementation is two lines.
     # YOUR CODE STARTS HERE
-    # source_tokenizer = BertTokenizer.from_pretrained('Langboat/mengzi-bert-base')
+    from transformers import T5Tokenizer, T5ForConditionalGeneration
+    _model_name = "t5-base"
+    target_tokenizer = source_tokenizer = T5Tokenizer.from_pretrained(
+            _model_name,
+            #bos_token="[BOS]",
+            eos_token="[EOS]",
+            pad_token="[PAD]",
+    )
+
     # source_tokenizer = transformers.PreTrainedTokenizerFast.from_pretrained(src_tokenizer_path)
-    source_tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
-    target_tokenizer = transformers.PreTrainedTokenizerFast.from_pretrained(tgt_tokenizer_path)
+    #source_tokenizer = BertTokenizer.from_pretrained('bert-base-multilingual-cased')
+    #target_tokenizer = transformers.PreTrainedTokenizerFast.from_pretrained(tgt_tokenizer_path)
     # YOUR CODE ENDS HERE
 
     # Task 4.2: Create TransformerEncoderDecoder object
@@ -459,16 +469,17 @@ def main():
     # YOUR CODE STARTS HERE
     device = args.device
 
-    model = TransfomerEncoderDecoderModel(
-        src_vocab_size=source_tokenizer.vocab_size,
-        tgt_vocab_size=target_tokenizer.vocab_size,
-        num_layers=args.num_layers,
-        hidden=args.hidden_size,
-        fcn_hidden=args.fcn_hidden,
-        num_heads=args.num_heads,
-        max_seq_len=args.max_seq_length,
-        dropout=args.dropout_rate,
-    )
+    model = T5ForConditionalGeneration.from_pretrained(_model_name)
+    #model = TransfomerEncoderDecoderModel(
+    #    src_vocab_size=source_tokenizer.vocab_size,
+    #    tgt_vocab_size=target_tokenizer.vocab_size,
+    #    num_layers=args.num_layers,
+    #    hidden=args.hidden_size,
+    #    fcn_hidden=args.fcn_hidden,
+    #    num_heads=args.num_heads,
+    #    max_seq_len=args.max_seq_length,
+    #    dropout=args.dropout_rate,
+    #)
     model = model.to(device)
     wandb.watch(model)
     # YOUR CODE ENDS HERE
@@ -514,6 +525,9 @@ def main():
         logger.info(f"Decoded input_ids: {source_tokenizer.decode(train_dataset[index]['input_ids'])}")
         logger.info(f"Decoded labels: {target_tokenizer.decode(train_dataset[index]['labels'])}")
         logger.info("\n")
+
+    for index in random.sample(range(len(eval_dataset)), 2):
+        logger.info(f"Eval input_ids: {source_tokenizer.decode(eval_dataset[index]['input_ids'])}")
 
     ###############################################################################
     # Part 4: Create PyTorch dataloaders that handle data shuffling and batching
@@ -581,6 +595,16 @@ def main():
         logger.info(f"Decoded labels: {target_tokenizer.decode(batch['labels'][index])}")
         logger.info("\n")
 
+    batch_eval = next(iter(eval_dataloader))
+    task_prefix = "translate English to German: "
+    for index in random.sample(range(len(batch_eval)), 2):
+        sentences = [target_tokenizer.decode(batch_eval['input_ids'][index])]
+        inputs = target_tokenizer([task_prefix + sentence for sentence in sentences], return_tensors="pt", padding=True)
+        inputs.to(device)
+        generated_eval = model.generate(input_ids=inputs["input_ids"])
+        logger.info(f"Eval pred: {target_tokenizer.batch_decode(generated_eval, skip_special_tokens=True)}")
+        logger.info(f"Eval input_ids loader: {source_tokenizer.decode(batch_eval['input_ids'][index])}")
+
     ###############################################################################
     # Part 6: Training loop
     ###############################################################################
@@ -595,19 +619,20 @@ def main():
             input_ids = batch["input_ids"].to(args.device)
             decoder_input_ids = batch["decoder_input_ids"].to(args.device)
             key_padding_mask = batch["encoder_padding_mask"].to(args.device)
-            labels = batch["labels"].to(args.device)
+            labels = batch["labels"].to(args.device)            
 
             logits = model(
                 input_ids,
-                decoder_input_ids=decoder_input_ids,
-                key_padding_mask=key_padding_mask
+                #attention_mask=key_padding_mask,
+                labels = labels
             )
 
-            loss = F.cross_entropy(
-                logits.view(-1, logits.shape[-1]),
-                labels.view(-1),
-                ignore_index=target_tokenizer.pad_token_id,
-            )
+            #loss = F.cross_entropy(
+            #    logits.view(-1, logits.shape[-1]),
+            #    labels.view(-1),
+            #    ignore_index=target_tokenizer.pad_token_id,
+            #)
+            loss = logits.loss
 
             loss.backward()
             optimizer.step()
@@ -626,21 +651,21 @@ def main():
                 step=global_step,
             )
 
-            if global_step % args.logging_steps == 0:
+            #if global_step % args.logging_steps == 0:
                 # An extra training metric that might be useful for understanding
                 # how well the model is doing on the training set.
                 # Please pay attention to it during training.
                 # If the metric is significantly below 80%, there is a chance of a bug somewhere.
-                predictions = logits.argmax(-1)
-                label_nonpad_mask = labels != target_tokenizer.pad_token_id
-                num_words_in_batch = label_nonpad_mask.sum().item()
+            #    predictions = logits.argmax(-1)
+            #    label_nonpad_mask = labels != target_tokenizer.pad_token_id
+            #    num_words_in_batch = label_nonpad_mask.sum().item()
 
-                accuracy = (predictions == labels).masked_select(label_nonpad_mask).sum().item() / num_words_in_batch
+            #    accuracy = (predictions == labels).masked_select(label_nonpad_mask).sum().item() / num_words_in_batch
 
-                wandb.log(
-                    {"train_batch_word_accuracy": accuracy},
-                    step=global_step,
-                )
+            #   wandb.log(
+            #        {"train_batch_word_accuracy": accuracy},
+            #        step=global_step,
+            #    )
 
             if global_step % args.eval_every_steps == 0 or global_step == args.max_train_steps:
                 eval_results, last_input_ids, last_decoded_preds, last_decoded_labels = evaluate_model(
