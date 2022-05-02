@@ -40,9 +40,7 @@ import wandb
 import transformers
 
 # Imports from our module
-from transformer_mt.modeling_transformer import TransfomerEncoderDecoderModel
 from transformer_mt import utils
-from transformers import BertTokenizer
 
 
 # Setup logging
@@ -549,10 +547,10 @@ def main():
     # (readability matters)
     # YOUR CODE STARTS HERE
     train_dataloader = DataLoader(
-        train_dataset, shuffle=True, collate_fn=collation_function_for_seq2seq_wrapped, batch_size=args.batch_size
+        train_dataset, shuffle=True, collate_fn=collation_function_for_seq2seq_wrapped,  batch_size=args.batch_size
     )
     eval_dataloader = DataLoader(
-        eval_dataset, collate_fn=collation_function_for_seq2seq_wrapped, batch_size=args.batch_size
+        eval_dataset, collate_fn=collation_function_for_seq2seq_wrapped,  batch_size=args.batch_size
     )
     # YOUR CODE ENDS HERE
 
@@ -624,7 +622,7 @@ def main():
             logits = model(
                 input_ids,
                 #attention_mask=key_padding_mask,
-                labels = labels
+                labels = labels,
             )
 
             #loss = F.cross_entropy(
@@ -656,16 +654,16 @@ def main():
                 # how well the model is doing on the training set.
                 # Please pay attention to it during training.
                 # If the metric is significantly below 80%, there is a chance of a bug somewhere.
-            #    predictions = logits.argmax(-1)
-            #    label_nonpad_mask = labels != target_tokenizer.pad_token_id
-            #    num_words_in_batch = label_nonpad_mask.sum().item()
+                #predictions = logits.argmax(-1)
+                #label_nonpad_mask = labels != target_tokenizer.pad_token_id
+                #num_words_in_batch = label_nonpad_mask.sum().item()
 
-            #    accuracy = (predictions == labels).masked_select(label_nonpad_mask).sum().item() / num_words_in_batch
+                #accuracy = (predictions == labels).masked_select(label_nonpad_mask).sum().item() / num_words_in_batch
 
-            #   wandb.log(
-            #        {"train_batch_word_accuracy": accuracy},
-            #        step=global_step,
-            #    )
+                #wandb.log(
+                #    {"train_batch_word_accuracy": accuracy},
+                #    step=global_step,
+                #)
 
             if global_step % args.eval_every_steps == 0 or global_step == args.max_train_steps:
                 eval_results, last_input_ids, last_decoded_preds, last_decoded_labels = evaluate_model(
