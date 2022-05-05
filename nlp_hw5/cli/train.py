@@ -261,6 +261,7 @@ def parse_args():
 
     args = parser.parse_args()
 
+    # Change for final proejct: skip tokenizer check since we use T5 tokenizer directly
     #if f"{args.source_lang}_tokenizer" not in os.listdir(args.output_dir):
     #    raise ValueError(f"The source tokenizer is not found in {args.output_dir}")
     
@@ -295,14 +296,15 @@ def preprocess_function(
         source_tokenizer: The tokenizer to use for the source language.
         target_tokenizer: The tokenizer to use for the target language.
     """
-    inputs = [ex[source_lang] for ex in examples["translation"]]
+    # It looks like T5 requires adding the prefix to know which target language is to generate.
+    # Need to be updated if target language is not DE
+    task_prefix = "translate English to German: "
+    inputs = [task_prefix + ex[source_lang] for ex in examples["translation"]]
     targets = [ex[target_lang] for ex in examples["translation"]]
 
+    # Change for final project: Need to add max_length otherwise will trigger CUDA out of memory even set batch size to be 4
     model_inputs = source_tokenizer(inputs, max_length=max_seq_length, truncation=True, padding=True)
-    #model_inputs = source_tokenizer(inputs, truncation=True)
-
     targets = target_tokenizer(targets, max_length=max_seq_length, truncation=True, padding=True)
-    #targets = target_tokenizer(targets, truncation=True)
     target_ids = targets["input_ids"]
 
     # Inline question 4.1:
@@ -381,14 +383,12 @@ def evaluate_model(
             # of a data structure that contains information returned by generate()
             # (2) We need decoder_input_ids in the .forward() call but not in .generate() call
 
+            # Change for final project: no need to set BOS for T5 pretaining model.
             generated_tokens = model.generate(
                 input_ids,
-                #bos_token_id=target_tokenizer.bos_token_id,
                 eos_token_id=target_tokenizer.eos_token_id,
                 pad_token_id=target_tokenizer.pad_token_id,
-                #attention_mask=key_padding_mask,
                 max_length=max_seq_length,
-                #num_beams=beam_size,
             )
             decoded_preds = target_tokenizer.batch_decode(generated_tokens, skip_special_tokens=True)
             decoded_labels = target_tokenizer.batch_decode(labels, skip_special_tokens=True)
@@ -410,7 +410,6 @@ def evaluate_model(
 
 
 def main():
-    # torch.cuda.empty_cache()
     # Parse the arguments
     args = parse_args()
     logger.info(f"Starting script with arguments: {args}")
@@ -440,25 +439,26 @@ def main():
     # Part 2: Create the model and load the tokenizers
     ###############################################################################
 
+    # Change for final project: use T5 tokenizer directly
     #src_tokenizer_path = os.path.join(args.output_dir, f"{args.source_lang}_tokenizer")
     #tgt_tokenizer_path = os.path.join(args.output_dir, f"{args.target_lang}_tokenizer")
+
     # Task 4.1: Load source and target tokenizers from the variables above
     # using transformers.PreTrainedTokenizerFast.from_pretrained
     # https://huggingface.co/docs/transformers/v4.16.2/en/main_classes/tokenizer#transformers.PreTrainedTokenizerFast
     # Our implementation is two lines.
     # YOUR CODE STARTS HERE
+
+    # Change for final project: no need to set BOS token since T5 only need PAD and EOS tokens
+    # use t5-base as the pretrained model
     from transformers import T5Tokenizer, T5ForConditionalGeneration
     _model_name = "t5-base"
     target_tokenizer = source_tokenizer = T5Tokenizer.from_pretrained(
             _model_name,
-            #bos_token="[BOS]",
             eos_token="[EOS]",
             pad_token="[PAD]",
     )
 
-    # source_tokenizer = transformers.PreTrainedTokenizerFast.from_pretrained(src_tokenizer_path)
-    #source_tokenizer = BertTokenizer.from_pretrained('bert-base-multilingual-cased')
-    #target_tokenizer = transformers.PreTrainedTokenizerFast.from_pretrained(tgt_tokenizer_path)
     # YOUR CODE ENDS HERE
 
     # Task 4.2: Create TransformerEncoderDecoder object
@@ -466,18 +466,10 @@ def main():
     # Move model to the device we use for training
     # YOUR CODE STARTS HERE
     device = args.device
-
+    
+    # Change for final project: Use t5 pretraining model instead of the Transformer model in HW5
     model = T5ForConditionalGeneration.from_pretrained(_model_name)
-    #model = TransfomerEncoderDecoderModel(
-    #    src_vocab_size=source_tokenizer.vocab_size,
-    #    tgt_vocab_size=target_tokenizer.vocab_size,
-    #    num_layers=args.num_layers,
-    #    hidden=args.hidden_size,
-    #    fcn_hidden=args.fcn_hidden,
-    #    num_heads=args.num_heads,
-    #    max_seq_len=args.max_seq_length,
-    #    dropout=args.dropout_rate,
-    #)
+
     model = model.to(device)
     wandb.watch(model)
     # YOUR CODE ENDS HERE
@@ -619,17 +611,12 @@ def main():
             key_padding_mask = batch["encoder_padding_mask"].to(args.device)
             labels = batch["labels"].to(args.device)            
 
+            # Change for final project: use T5 pretrianed model's loss directly
             logits = model(
                 input_ids,
-                #attention_mask=key_padding_mask,
                 labels = labels,
             )
 
-            #loss = F.cross_entropy(
-            #    logits.view(-1, logits.shape[-1]),
-            #    labels.view(-1),
-            #    ignore_index=target_tokenizer.pad_token_id,
-            #)
             loss = logits.loss
 
             loss.backward()
